@@ -77,9 +77,10 @@ export default function CameraPage() {
   const processImage = useCallback(
     async (source: string | Blob) => {
       setBusy(true);
-      setStatus("Reading label…");
+      setStatus("Cropping label…");
       try {
         const { extractTextFromImage } = await import("@/lib/ocr");
+        setStatus("Reading label…");
         const lines = await extractTextFromImage(source);
         const query = pickOcrQuery(lines);
 
