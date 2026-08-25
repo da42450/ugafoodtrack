@@ -12,8 +12,18 @@ Mobile-first web app for tracking nutrition at UGA dining halls.
 
 - Next.js (App Router) + TypeScript + Tailwind  
 - Fuse.js fuzzy matching  
-- Tesseract.js OCR (lazy-loaded on the camera page)  
+- Gemini vision for label reads (recommended) + Tesseract fallback  
 - UGA red / white / black UI  
+
+## Label scanning (important)
+
+UGA digital shelf labels (e-ink) often defeat on-device Tesseract. For reliable scans, add a free Gemini API key:
+
+1. Create a key at [Google AI Studio](https://aistudio.google.com/apikey)
+2. Local: copy `.env.example` → `.env.local` and set `GEMINI_API_KEY=...`
+3. Vercel: Project → Settings → Environment Variables → add `GEMINI_API_KEY` → Redeploy
+
+Without the key, the app still tries improved local OCR and menu matching, then falls back to Search.
 
 ## Develop
 

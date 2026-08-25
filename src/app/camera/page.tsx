@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Camera, ImagePlus, Loader2 } from "lucide-react";
 import { PressButton } from "@/components/PressButton";
 import { ScreenEnter } from "@/components/ScreenEnter";
-import { matchFoods, pickOcrQuery } from "@/lib/fuzzy";
+import { matchFoods, resolveOcrAgainstMenu } from "@/lib/fuzzy";
 import { usePlate } from "@/state/plate";
 
 export default function CameraPage() {
@@ -74,45 +74,78 @@ export default function CameraPage() {
     };
   }, [stopCamera]);
 
+  const goWithQuery = useCallback(
+    (query: string) => {
+      const matches = matchFoods(foods, query, 5);
+      if (matches.length === 0 || (matches[0]?.score ?? 1) > 0.5) {
+        router.push(`/search?q=${encodeURIComponent(query)}`);
+        return;
+      }
+      if (matches.length === 1) {
+        router.push(`/match?foodId=${encodeURIComponent(matches[0].food.id)}`);
+        return;
+      }
+      const ids = matches.map((m) => m.food.id).join(",");
+      router.push(
+        `/camera/results?q=${encodeURIComponent(query)}&ids=${encodeURIComponent(ids)}`,
+      );
+    },
+    [foods, router],
+  );
+
   const processImage = useCallback(
     async (source: string | Blob) => {
       setBusy(true);
-      setStatus("Cropping label…");
+      setCameraError(null);
       try {
-        const { extractTextFromImage } = await import("@/lib/ocr");
+        const blob =
+          typeof source === "string"
+            ? await fetch(source).then((r) => r.blob())
+            : source;
+
+        const { extractDishNameViaApi, extractTextFromImage } = await import(
+          "@/lib/ocr"
+        );
+
+        // 1) Vision AI when GEMINI_API_KEY is configured (best for e-ink labels)
         setStatus("Reading label…");
-        const lines = await extractTextFromImage(source);
-        const query = pickOcrQuery(lines);
-
-        if (!query) {
-          router.push("/search");
-          return;
+        try {
+          const visionName = await extractDishNameViaApi(blob);
+          if (visionName) {
+            goWithQuery(visionName);
+            return;
+          }
+        } catch {
+          // fall through to on-device OCR
         }
 
-        const matches = matchFoods(foods, query, 5);
-        if (matches.length === 0 || (matches[0]?.score ?? 1) > 0.5) {
-          router.push(`/search?q=${encodeURIComponent(query)}`);
-          return;
-        }
-
-        if (matches.length === 1) {
+        // 2) Local OCR + pick the guess that best matches today's menu
+        setStatus("Trying on-device OCR…");
+        const lines = await extractTextFromImage(blob);
+        const resolved = resolveOcrAgainstMenu(lines, foods);
+        if (resolved) {
+          const { query, matches } = resolved;
+          if (matches.length === 1) {
+            router.push(
+              `/match?foodId=${encodeURIComponent(matches[0].food.id)}`,
+            );
+            return;
+          }
+          const ids = matches.map((m) => m.food.id).join(",");
           router.push(
-            `/match?foodId=${encodeURIComponent(matches[0].food.id)}`,
+            `/camera/results?q=${encodeURIComponent(query)}&ids=${encodeURIComponent(ids)}`,
           );
           return;
         }
 
-        const ids = matches.map((m) => m.food.id).join(",");
-        router.push(
-          `/camera/results?q=${encodeURIComponent(query)}&ids=${encodeURIComponent(ids)}`,
-        );
+        router.push("/search");
       } catch {
         setStatus("");
         setBusy(false);
         setCameraError("Couldn’t read that photo. Try again or search.");
       }
     },
-    [foods, router],
+    [foods, goWithQuery, router],
   );
 
   const captureFromVideo = async () => {

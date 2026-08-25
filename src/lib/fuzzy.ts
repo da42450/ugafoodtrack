@@ -44,11 +44,9 @@ function isNoiseLine(line: string): boolean {
   if (ICON_ONLY.test(t)) return true;
   if (NOISE_LINE.test(t)) return true;
   if (/^allergens?/i.test(t)) return true;
-  // Comma-heavy allergen rows: "Peanuts, Tree Nuts, Wheat, Soybeans"
   const commas = (t.match(/,/g) || []).length;
   if (commas >= 2 && ALLERGEN_WORDS.test(t)) return true;
   if (commas >= 1 && t.length < 70 && ALLERGEN_WORDS.test(t)) return true;
-  // Pure barcode / numeric junk
   if (/^[\d\s\-|:]+$/.test(t)) return true;
   return false;
 }
@@ -71,14 +69,13 @@ export function pickOcrQuery(lines: string[]): string {
 
   if (cleaned.length === 0) return "";
 
-  // Title is at the top of the cropped label — keep reading order, don't sort by length
   const first = cleaned[0];
   const second = cleaned[1];
 
   if (!second) return first;
 
   const secondContinues =
-    /^(with|w\/?|and|&|salad|sauce|bowl|rice|noodles?)/i.test(second) ||
+    /^(with|w\/?|and|&|salad|sauce|bowl|rice|noodles?|sesame)/i.test(second) ||
     second.length <= 28 ||
     first.length < 22;
 
@@ -87,4 +84,40 @@ export function pickOcrQuery(lines: string[]): string {
   }
 
   return first;
+}
+
+/** Build several OCR query guesses, score each against today's menu, pick best. */
+export function resolveOcrAgainstMenu(
+  lines: string[],
+  foods: MenuFood[],
+): { query: string; matches: FoodMatch[] } | null {
+  const titleLines = lines
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter((l) => !isNoiseLine(l))
+    .filter(looksLikeTitle);
+
+  const candidates = new Set<string>();
+  const primary = pickOcrQuery(lines);
+  if (primary) candidates.add(primary);
+  if (titleLines.length) {
+    candidates.add(titleLines.slice(0, 2).join(" "));
+    candidates.add(titleLines.slice(0, 3).join(" "));
+    for (const line of titleLines.slice(0, 4)) candidates.add(line);
+  }
+
+  let best: { query: string; matches: FoodMatch[] } | null = null;
+
+  for (const query of candidates) {
+    if (query.trim().length < 4) continue;
+    const matches = matchFoods(foods, query, 5);
+    if (!matches.length) continue;
+    const score = matches[0].score;
+    if (!best || score < best.matches[0].score) {
+      best = { query, matches };
+    }
+  }
+
+  // Reject if even the best guess is very weak (likely OCR gibberish)
+  if (!best || best.matches[0].score > 0.48) return null;
+  return best;
 }
