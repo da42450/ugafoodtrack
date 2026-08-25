@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Camera, Home, RefreshCw, Search, Trash2 } from "lucide-react";
 import { FoodRow } from "@/components/FoodRow";
 import { PlateTotals } from "@/components/PlateTotals";
 import { PressButton, PressLink } from "@/components/PressButton";
@@ -46,23 +46,30 @@ export default function PlatePage() {
     <main className="flex min-h-full flex-1 flex-col pb-28">
       <PlateTotals totals={totals} />
 
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--uga-border)] bg-[var(--uga-surface)] px-5 py-3">
-        <div className="min-w-0">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--uga-border)] bg-[var(--uga-surface)] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
           <Link
             href="/hall"
-            className="text-sm font-semibold text-[var(--uga-red)] touch-manipulation"
+            aria-label="Home — change dining hall"
+            className="flex h-11 shrink-0 items-center gap-1.5 border-2 border-black bg-white px-3 text-sm font-semibold text-black transition-transform active:scale-[0.97] touch-manipulation"
           >
-            {hall?.shortName ?? "Change hall"}
+            <Home className="h-4 w-4" strokeWidth={2.5} />
+            Home
           </Link>
-          <p className="truncate text-xs text-[var(--uga-muted)]">
-            {menuLoading
-              ? "Loading today’s menu…"
-              : menuError
-                ? menuError
-                : `${foods.length} items · ${menuDate ?? "today"}`}
-          </p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-black">
+              {hall?.shortName ?? "Dining hall"}
+            </p>
+            <p className="truncate text-xs text-[var(--uga-muted)]">
+              {menuLoading
+                ? "Loading today’s menu…"
+                : menuError
+                  ? menuError
+                  : `${foods.length} items · ${menuDate ?? "today"}`}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => void refreshMenu()}
