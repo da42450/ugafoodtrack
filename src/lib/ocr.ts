@@ -118,16 +118,40 @@ export async function extractTextFromImage(
   }
 }
 
+export type VisionReadResult =
+  | { ok: true; name: string }
+  | { ok: false; reason: "no_key" | "empty" | "error"; message?: string };
+
 /** Send label photo to server vision (Gemini) when configured. */
 export async function extractDishNameViaApi(
   imageSource: Blob | File,
-): Promise<string | null> {
+): Promise<VisionReadResult> {
   const body = new FormData();
-  body.append("image", imageSource, "label.jpg");
+  const file =
+    imageSource instanceof File
+      ? imageSource
+      : new File([imageSource], "label.jpg", {
+          type: imageSource.type || "image/jpeg",
+        });
+  body.append("image", file);
+
   const res = await fetch("/api/read-label", { method: "POST", body });
-  if (res.status === 503) return null;
-  if (!res.ok) throw new Error("Vision read failed");
-  const data = (await res.json()) as { name?: string };
+  if (res.status === 503) return { ok: false, reason: "no_key" };
+
+  const data = (await res.json().catch(() => ({}))) as {
+    name?: string;
+    error?: string;
+  };
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: "error",
+      message: data.error || "Vision read failed",
+    };
+  }
+
   const name = data.name?.trim() ?? "";
-  return name || null;
+  if (!name) return { ok: false, reason: "empty" };
+  return { ok: true, name };
 }

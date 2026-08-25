@@ -11,6 +11,13 @@ Rules:
 - Do not add quotes, labels, or explanation.
 - If you cannot read a dish name, return exactly: UNKNOWN`;
 
+const MODEL_CANDIDATES = [
+  process.env.GEMINI_MODEL,
+  "gemini-3.6-flash",
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+].filter((m): m is string => Boolean(m));
+
 export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -30,33 +37,47 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await image.arrayBuffer());
-    // Keep payloads small for mobile uploads
     if (buffer.byteLength > 6_000_000) {
       return NextResponse.json({ error: "Image too large" }, { status: 413 });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
-    });
+    const inlineData = {
+      mimeType,
+      data: buffer.toString("base64"),
+    };
 
-    const result = await model.generateContent([
-      { text: PROMPT },
-      {
-        inlineData: {
-          mimeType,
-          data: buffer.toString("base64"),
-        },
-      },
-    ]);
+    let lastError = "Vision request failed";
+    for (const modelName of MODEL_CANDIDATES) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent([
+          { text: PROMPT },
+          { inlineData },
+        ]);
 
-    let name = result.response.text().trim().replace(/^["']|["']$/g, "");
-    if (!name || /^unknown$/i.test(name)) {
-      return NextResponse.json({ name: "" });
+        let name = result.response.text().trim().replace(/^["']|["']$/g, "");
+        if (!name || /^unknown$/i.test(name)) {
+          return NextResponse.json({ name: "", model: modelName });
+        }
+        name = name
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        return NextResponse.json({ name, model: modelName });
+      } catch (error) {
+        lastError =
+          error instanceof Error ? error.message : "Vision request failed";
+        // Try next model if this one is missing/deprecated
+        if (!/404|not found|no longer available/i.test(lastError)) {
+          break;
+        }
+      }
     }
-    // Single line cleanup
-    name = name.split("\n")[0].trim();
-    return NextResponse.json({ name });
+
+    return NextResponse.json({ error: lastError }, { status: 502 });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Vision request failed";

@@ -66,9 +66,15 @@ function SearchContent({ initialQuery }: { initialQuery: string }) {
             Type a food name from today’s stations.
           </p>
         ) : results.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-[var(--uga-muted)]">
-            No matches. Try fewer words or check the hall.
-          </p>
+          <div className="px-5 py-8">
+            <p className="text-sm text-[var(--uga-muted)]">
+              No matches for “{query.trim()}” at this hall today.
+            </p>
+            <p className="mt-2 text-sm text-[var(--uga-muted)]">
+              Try fewer words, or tap Home and switch dining halls — menus
+              differ by location.
+            </p>
+          </div>
         ) : (
           <ul>
             {results.map(({ food }) => (

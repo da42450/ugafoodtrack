@@ -25,6 +25,8 @@ UGA digital shelf labels (e-ink) often defeat on-device Tesseract. For reliable 
 
 Without the key, the app still tries improved local OCR and menu matching, then falls back to Search.
 
+Scans match against **today’s menu at the hall you picked**. If the dish isn’t served there today, Search will show no hits — switch halls with Home.
+
 ## Develop
 
 ```bash

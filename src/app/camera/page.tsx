@@ -76,9 +76,21 @@ export default function CameraPage() {
 
   const goWithQuery = useCallback(
     (query: string) => {
-      const matches = matchFoods(foods, query, 5);
-      if (matches.length === 0 || (matches[0]?.score ?? 1) > 0.5) {
-        router.push(`/search?q=${encodeURIComponent(query)}`);
+      const cleaned = query.trim();
+      if (!cleaned) {
+        router.push("/search");
+        return;
+      }
+
+      // Menu still loading — don't drop the read name
+      if (foods.length === 0) {
+        router.push(`/search?q=${encodeURIComponent(cleaned)}`);
+        return;
+      }
+
+      const matches = matchFoods(foods, cleaned, 5);
+      if (matches.length === 0 || (matches[0]?.score ?? 1) > 0.55) {
+        router.push(`/search?q=${encodeURIComponent(cleaned)}`);
         return;
       }
       if (matches.length === 1) {
@@ -87,7 +99,7 @@ export default function CameraPage() {
       }
       const ids = matches.map((m) => m.food.id).join(",");
       router.push(
-        `/camera/results?q=${encodeURIComponent(query)}&ids=${encodeURIComponent(ids)}`,
+        `/camera/results?q=${encodeURIComponent(cleaned)}&ids=${encodeURIComponent(ids)}`,
       );
     },
     [foods, router],
@@ -109,14 +121,10 @@ export default function CameraPage() {
 
         // 1) Vision AI when GEMINI_API_KEY is configured (best for e-ink labels)
         setStatus("Reading label…");
-        try {
-          const visionName = await extractDishNameViaApi(blob);
-          if (visionName) {
-            goWithQuery(visionName);
-            return;
-          }
-        } catch {
-          // fall through to on-device OCR
+        const vision = await extractDishNameViaApi(blob);
+        if (vision.ok) {
+          goWithQuery(vision.name);
+          return;
         }
 
         // 2) Local OCR + pick the guess that best matches today's menu
@@ -138,11 +146,19 @@ export default function CameraPage() {
           return;
         }
 
-        router.push("/search");
+        setStatus("");
+        setBusy(false);
+        setCameraError(
+          vision.reason === "error"
+            ? "Couldn’t read that label. Try a closer photo, or Search."
+            : "Couldn’t read a dish name. Try again or Search.",
+        );
+        setCameraReady(true);
       } catch {
         setStatus("");
         setBusy(false);
         setCameraError("Couldn’t read that photo. Try again or search.");
+        setCameraReady(true);
       }
     },
     [foods, goWithQuery, router],
@@ -248,8 +264,8 @@ export default function CameraPage() {
           </PressButton>
         </div>
 
-        {cameraError && cameraReady === false ? (
-          <p className="mt-4 text-center text-xs text-white/60">{cameraError}</p>
+        {cameraError ? (
+          <p className="mt-4 text-center text-xs text-white/70">{cameraError}</p>
         ) : null}
       </ScreenEnter>
     </main>
